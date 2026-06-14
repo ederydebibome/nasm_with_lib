@@ -1588,6 +1588,17 @@ static void parse_cmdline(int argc, char **argv, int pass)
         nasm_free(envcopy);
     }
 
+    /* add userlib include path based on platform */
+    if (pass == 1) {
+    #ifdef _WIN32
+        strlist_add(include_path, "userlib\\win64\\");
+    #elif defined(__APPLE__)
+        strlist_add(include_path, "userlib/mac64/");
+    #else
+        strlist_add(include_path, "userlib/linux64/");
+    #endif
+    }
+
     /*
      * Now process the actual command line.
      */
