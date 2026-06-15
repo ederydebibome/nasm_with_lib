@@ -1,15 +1,18 @@
 ; userlib/win64/io.asm
 ; Windows x64 - Microsoft calling convention
+default rel
 
 extern GetStdHandle
 extern WriteFile
 extern ReadFile
+extern strlen
 
 section .data
 io_written      dd 0
 io_read         dd 0
 io_buf          times 64 db 0
 printf_buf      times 32 db 0
+io_newline      db 0x0A
 
 section .text
 
@@ -22,36 +25,41 @@ global puts
 puts:
     push rbx
     push r12
+    push r13
+    sub rsp, 48
     mov r12, rcx
     ; get string length
     call strlen
-    push rax
+    mov r13, rax
     ; get stdout handle
     mov rcx, -11
     call GetStdHandle
     mov rbx, rax
-    pop r8
     mov rcx, rbx
     mov rdx, r12
+    mov r8, r13
     lea r9, [io_written]
+    mov qword [rsp + 32], 0
     call WriteFile
     test rax, rax
     jz  .fail
     ; write newline
-    sub rsp, 8
-    mov byte [rsp], 0x0A
     mov rcx, rbx
-    lea rdx, [rsp]
+    lea rdx, [io_newline]
     mov r8, 1
     lea r9, [io_written]
+    mov qword [rsp + 32], 0
     call WriteFile
-    add rsp, 8
     xor rax, rax
+    add rsp, 48
+    pop r13
     pop r12
     pop rbx
     ret
 .fail:
     or rax, -1
+    add rsp, 48
+    pop r13
     pop r12
     pop rbx
     ret
@@ -235,12 +243,12 @@ printf:
     mov rcx, rax
     call strlen
     add r14, rax
+    mov r8, rax
     mov rcx, -11
     call GetStdHandle
     mov rbx, rax
     mov rcx, rbx
     mov rdx, r15
-    mov r8, rax
     lea r9, [io_written]
     call WriteFile
     jmp .next_char
@@ -488,7 +496,6 @@ sprintf:
     call .sp_get_arg
     lea rdi, [printf_buf + 31]
     mov byte [rdi], 0
-    mov rax, rcx
 .sp_hex_loop:
     mov rcx, rax
     and rcx, 0xF
@@ -973,7 +980,7 @@ fopen:
     movzx rax, byte [r13 + 1]
     cmp al, '+'
     jne .do_open
-    or  r14, 0x80000000
+    or  r14d, 0x80000000
     or  r14, 0x40000000
     or  r15, FLAG_READ
     or  r15, FLAG_WRITE

@@ -145,9 +145,9 @@ global sin
 sin:
     sub rsp, 8
     movsd [rsp], xmm0
-    fldl [rsp]
+    fld qword [rsp]
     fsin
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -161,9 +161,9 @@ global cos
 cos:
     sub rsp, 8
     movsd [rsp], xmm0
-    fldl [rsp]
+    fld qword [rsp]
     fcos
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -177,10 +177,10 @@ global tan
 tan:
     sub rsp, 8
     movsd [rsp], xmm0
-    fldl [rsp]
+    fld qword [rsp]
     fptan
     fstp st0            ; pop the implicit 1.0
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -194,10 +194,10 @@ global atan
 atan:
     sub rsp, 8
     movsd [rsp], xmm0
-    fldl [rsp]
+    fld qword [rsp]
     fld1
     fpatan              ; st0 = atan(x/1) = atan(x)
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -212,10 +212,10 @@ atan2:
     sub rsp, 16
     movsd [rsp],     xmm0   ; y
     movsd [rsp + 8], xmm1   ; x
-    fldl [rsp + 8]          ; st0 = x
-    fldl [rsp]              ; st0 = y, st1 = x
+    fld qword [rsp + 8]          ; st0 = x
+    fld qword [rsp]              ; st0 = y, st1 = x
     fpatan                  ; st0 = atan2(y, x)
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 16
     ret
@@ -238,10 +238,10 @@ asin:
     movsd xmm0, [rsp]
     ; atan2(x, sqrt(1-x^2))
     movsd [rsp + 8], xmm1
-    fldl [rsp + 8]          ; st0 = sqrt(1-x^2)
-    fldl [rsp]              ; st0 = x
+    fld qword [rsp + 8]          ; st0 = sqrt(1-x^2)
+    fld qword [rsp]              ; st0 = x
     fpatan
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 16
     ret
@@ -262,10 +262,10 @@ acos:
     sqrtsd xmm1, xmm1
     movsd xmm0, [rsp]
     movsd [rsp + 8], xmm1
-    fldl [rsp]              ; st0 = x
-    fldl [rsp + 8]          ; st0 = sqrt(1-x^2)
+    fld qword [rsp]              ; st0 = x
+    fld qword [rsp + 8]          ; st0 = sqrt(1-x^2)
     fpatan                  ; atan2(sqrt, x)
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 16
     ret
@@ -279,7 +279,7 @@ global exp
 exp:
     sub rsp, 24
     movsd [rsp], xmm0
-    fldl [rsp]              ; st0 = x
+    fld qword [rsp]              ; st0 = x
     fldl2e                  ; st0 = log2(e), st1 = x
     fmulp                   ; st0 = x * log2(e)
     fld st0                 ; st0 = copy, st1 = x*log2(e)
@@ -291,7 +291,7 @@ exp:
     faddp                   ; st0 = 2^frac
     fscale                  ; st0 = 2^frac * 2^int = e^x
     fstp st1
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 24
     ret
@@ -306,9 +306,9 @@ log:
     sub rsp, 8
     movsd [rsp], xmm0
     fldln2                  ; st0 = ln(2)
-    fldl [rsp]              ; st0 = x, st1 = ln(2)
+    fld qword [rsp]              ; st0 = x, st1 = ln(2)
     fyl2x                   ; st0 = ln(2) * log2(x) = ln(x)
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -323,9 +323,9 @@ log2:
     sub rsp, 8
     movsd [rsp], xmm0
     fld1                    ; st0 = 1.0
-    fldl [rsp]              ; st0 = x, st1 = 1.0
+    fld qword [rsp]              ; st0 = x, st1 = 1.0
     fyl2x                   ; st0 = 1.0 * log2(x)
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -340,9 +340,9 @@ log10:
     sub rsp, 8
     movsd [rsp], xmm0
     fldlg2                  ; st0 = log10(2)
-    fldl [rsp]              ; st0 = x, st1 = log10(2)
+    fld qword [rsp]              ; st0 = x, st1 = log10(2)
     fyl2x                   ; st0 = log10(2) * log2(x) = log10(x)
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 8
     ret
@@ -357,8 +357,8 @@ pow:
     sub rsp, 16
     movsd [rsp],     xmm0
     movsd [rsp + 8], xmm1
-    fldl [rsp + 8]          ; st0 = y
-    fldl [rsp]              ; st0 = x, st1 = y
+    fld qword [rsp + 8]          ; st0 = y
+    fld qword [rsp]              ; st0 = x, st1 = y
     fyl2x                   ; st0 = y * log2(x)
     fld st0
     frndint                 ; st0 = int part
@@ -369,7 +369,7 @@ pow:
     faddp                   ; 2^frac
     fscale                  ; 2^(frac+int) = x^y
     fstp st1
-    fstpl [rsp]
+    fstp qword [rsp]
     movsd xmm0, [rsp]
     add rsp, 16
     ret
@@ -388,7 +388,7 @@ sinh:
     movsd xmm2, xmm0
     movq xmm0, rbx
     andpd xmm0, [_abs_mask]
-    negpd xmm0, xmm0
+    xorpd xmm0, [_sign_mask]
     call exp
     subsd xmm2, xmm0
     mulsd xmm2, [_half]
@@ -410,7 +410,7 @@ cosh:
     movsd xmm2, xmm0
     movq xmm0, rbx
     andpd xmm0, [_abs_mask]
-    negpd xmm0, xmm0
+    xorpd xmm0, [_sign_mask]
     call exp
     addsd xmm2, xmm0
     mulsd xmm2, [_half]

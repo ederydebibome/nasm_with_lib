@@ -711,7 +711,7 @@ strftime:
     push rdx
     add al, '0'
     call .write_char
-    pop eax
+    pop rax
     xor edx, edx
     mov ecx, 10
     div ecx
@@ -733,14 +733,14 @@ strftime:
     push rdx
     add al, '0'
     call .write_char
-    pop eax
+    pop rax
     xor edx, edx
     mov ecx, 100
     div ecx
     push rdx
     add al, '0'
     call .write_char
-    pop eax
+    pop rax
     xor edx, edx
     mov ecx, 10
     div ecx

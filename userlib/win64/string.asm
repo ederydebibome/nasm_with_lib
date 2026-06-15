@@ -1,5 +1,6 @@
 ; userlib/win64/string.asm
 ; Windows x64 - Microsoft calling convention
+default rel
 
 section .text
 
@@ -10,13 +11,14 @@ section .text
 ;----------------------------------------------------------
 global strlen
 strlen:
-    xor rax, rax
-.loop:
-    cmp byte [rcx + rax], 0
-    je  .done
-    inc rax
-    jmp .loop
-.done:
+    push rdi
+    mov rdi, rcx
+    mov rcx, -1
+    xor eax, eax
+    repne scasb
+    mov rax, -2
+    sub rax, rcx
+    pop rdi
     ret
 
 ;----------------------------------------------------------
@@ -29,9 +31,9 @@ global strcpy
 strcpy:
     mov rax, rcx
 .loop:
-    mov bl, byte [rdx]
-    mov byte [rcx], bl
-    test bl, bl
+    mov r8b, byte [rdx]
+    mov byte [rcx], r8b
+    test r8b, r8b
     jz  .done
     inc rcx
     inc rdx
@@ -52,9 +54,9 @@ strncpy:
     test r8, r8
     jz  .done
 .loop:
-    mov bl, byte [rdx]
-    mov byte [rcx], bl
-    test bl, bl
+    mov r8b, byte [rdx]
+    mov byte [rcx], r8b
+    test r8b, r8b
     jz  .pad
     inc rcx
     inc rdx
@@ -85,9 +87,9 @@ strcat:
     inc rcx
     jmp .find_end
 .copy:
-    mov bl, byte [rdx]
-    mov byte [rcx], bl
-    test bl, bl
+    mov r8b, byte [rdx]
+    mov byte [rcx], r8b
+    test r8b, r8b
     jz  .done
     inc rcx
     inc rdx
@@ -113,10 +115,10 @@ strncat:
 .copy:
     test r8, r8
     jz  .terminate
-    mov bl, byte [rdx]
-    test bl, bl
+    mov r8b, byte [rdx]
+    test r8b, r8b
     jz  .terminate
-    mov byte [rcx], bl
+    mov byte [rcx], r8b
     inc rcx
     inc rdx
     dec r8
@@ -135,8 +137,8 @@ global strcmp
 strcmp:
 .loop:
     mov al, byte [rcx]
-    mov bl, byte [rdx]
-    cmp al, bl
+    mov r8b, byte [rdx]
+    cmp al, r8b
     jne .diff
     test al, al
     jz  .equal
@@ -148,8 +150,8 @@ strcmp:
     ret
 .diff:
     movzx rax, al
-    movzx rbx, bl
-    sub rax, rbx
+    movzx r8, r8b
+    sub rax, r8
     ret
 
 ;----------------------------------------------------------
@@ -165,8 +167,8 @@ strncmp:
     jz  .equal
 .loop:
     mov al, byte [rcx]
-    mov bl, byte [rdx]
-    cmp al, bl
+    mov r8b, byte [rdx]
+    cmp al, r8b
     jne .diff
     test al, al
     jz  .equal
@@ -179,8 +181,8 @@ strncmp:
     ret
 .diff:
     movzx rax, al
-    movzx rbx, bl
-    sub rax, rbx
+    movzx r8, r8b
+    sub rax, r8
     ret
 
 ;----------------------------------------------------------
@@ -248,10 +250,10 @@ strstr:
     push rdx
 .match:
     mov al, byte [rcx]
-    mov bl, byte [rdx]
-    test bl, bl
+    mov r8b, byte [rdx]
+    test r8b, r8b
     jz  .found
-    cmp al, bl
+    cmp al, r8b
     jne .nomatch
     inc rcx
     inc rdx
@@ -286,10 +288,10 @@ strspn:
     push rcx
     mov rcx, rdx
 .inner:
-    mov bl, byte [rcx]
-    test bl, bl
+    mov r8b, byte [rcx]
+    test r8b, r8b
     jz  .not_found
-    cmp bl, cl
+    cmp r8b, cl
     je  .found
     inc rcx
     jmp .inner
@@ -322,10 +324,10 @@ strcspn:
     push rcx
     mov rcx, rdx
 .inner:
-    mov bl, byte [rcx]
-    test bl, bl
+    mov r8b, byte [rcx]
+    test r8b, r8b
     jz  .not_found
-    cmp bl, cl
+    cmp r8b, cl
     je  .found
     inc rcx
     jmp .inner
@@ -356,10 +358,10 @@ strpbrk:
     push rcx
     mov rcx, rdx
 .inner:
-    mov bl, byte [rcx]
-    test bl, bl
+    mov r8b, byte [rcx]
+    test r8b, r8b
     jz  .next
-    cmp bl, al
+    cmp r8b, al
     je  .found
     inc rcx
     jmp .inner
@@ -402,10 +404,10 @@ strtok:
     push rcx
     mov rcx, rdx
 .check_delim:
-    mov bl, byte [rcx]
-    test bl, bl
+    mov r8b, byte [rcx]
+    test r8b, r8b
     jz  .not_delim
-    cmp bl, al
+    cmp r8b, al
     je  .is_delim
     inc rcx
     jmp .check_delim
@@ -423,10 +425,10 @@ strtok:
     push rcx
     mov rcx, rdx
 .check_end:
-    mov bl, byte [rcx]
-    test bl, bl
+    mov r8b, byte [rcx]
+    test r8b, r8b
     jz  .not_end
-    cmp bl, al
+    cmp r8b, al
     je  .end_token
     inc rcx
     jmp .check_end
@@ -545,8 +547,8 @@ memcpy:
     test r8, r8
     jz  .done
 .loop:
-    mov bl, byte [rdx]
-    mov byte [rcx], bl
+    mov r8b, byte [rdx]
+    mov byte [rcx], r8b
     inc rcx
     inc rdx
     dec r8
@@ -577,8 +579,8 @@ memmove:
     dec rcx
     dec rdx
 .back_loop:
-    mov bl, byte [rdx]
-    mov byte [rcx], bl
+    mov r8b, byte [rdx]
+    mov byte [rcx], r8b
     dec rcx
     dec rdx
     dec r8
@@ -586,8 +588,8 @@ memmove:
     ret
 .forward:
 .loop:
-    mov bl, byte [rdx]
-    mov byte [rcx], bl
+    mov r8b, byte [rdx]
+    mov byte [rcx], r8b
     inc rcx
     inc rdx
     dec r8
@@ -628,8 +630,8 @@ memcmp:
     jz  .equal
 .loop:
     mov al, byte [rcx]
-    mov bl, byte [rdx]
-    cmp al, bl
+    mov r8b, byte [rdx]
+    cmp al, r8b
     jne .diff
     inc rcx
     inc rdx
@@ -640,8 +642,8 @@ memcmp:
     ret
 .diff:
     movzx rax, al
-    movzx rbx, bl
-    sub rax, rbx
+    movzx r8, r8b
+    sub rax, r8
     ret
 
 ;----------------------------------------------------------

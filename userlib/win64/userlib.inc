@@ -1,6 +1,5 @@
-
-%include "stdio.asm"
 %include "string.asm"
+%include "stdio.asm"
 %include "stdlib.asm"
 %include "math.asm"
 %include "process.asm"

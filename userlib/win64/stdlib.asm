@@ -1,6 +1,7 @@
 ; userlib/win64/stdlib.asm
 ; Windows x64 - Microsoft calling convention
 ; mirrors <stdlib.h>
+default rel
 
 extern GetProcessHeap
 extern HeapAlloc
@@ -11,6 +12,8 @@ extern SetEnvironmentVariableA
 
 section .data
 _rand_seed      dq 12345678
+_rand_hw_checked db 0
+_rand_hw_supported db 0
 _atexit_table   times 32 dq 0      ; max 32 atexit handlers
 _atexit_count   dq 0
 
@@ -245,7 +248,9 @@ itoa:
     push r12
     push r13
     push r14
+    push r15
     mov r12, rdx        ; buffer
+    mov r15, rdx        ; original buffer
     mov r13, r8         ; base
     mov r14, rcx        ; value
     mov rax, r12
@@ -288,7 +293,8 @@ itoa:
     test cl, cl
     jnz .copy
 
-    mov rax, rdx        ; return original buffer start
+    mov rax, r15        ; return original buffer start
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -300,8 +306,8 @@ itoa:
 ; rcx = value
 ; returns rax = absolute value
 ;----------------------------------------------------------
-global abs
-abs:
+global _abs
+_abs:
     mov rax, rcx
     test rax, rax
     jns .done
@@ -316,20 +322,41 @@ abs:
 ;----------------------------------------------------------
 global labs
 labs:
-    jmp abs
+    jmp _abs
 
 ;----------------------------------------------------------
-; rand - generate pseudo random number
+; rand - generate hardware random number when RDRAND is available
 ; returns rax = random number 0..32767
 ;----------------------------------------------------------
 global rand
 rand:
-    mov rax, [_rand_seed]
-    imul rax, 6364136223846793005
-    add rax, 1442695040888963407
+    push rbx
+    cmp byte [_rand_hw_checked], 0
+    jne .checked
+    mov eax, 1
+    cpuid
+    bt ecx, 30             ; RDRAND support bit
+    setc [_rand_hw_supported]
+    mov byte [_rand_hw_checked], 1
+.checked:
+    cmp byte [_rand_hw_supported], 0
+    je .fallback
+    mov ecx, 10
+.retry:
+    rdrand eax
+    jc .done
+    loop .retry
+.fallback:
+    rdtsc
+    xor eax, edx
+    xor eax, esp
+    xor eax, [_rand_seed]
+    imul eax, eax, 1103515245
+    add eax, 12345
     mov [_rand_seed], rax
-    shr rax, 33
-    and rax, 0x7FFF
+.done:
+    and eax, 0x7FFF
+    pop rbx
     ret
 
 ;----------------------------------------------------------
@@ -518,9 +545,10 @@ bsearch:
     mov rcx, r12
     mov rdx, rax
     call rbx
+    mov r11, rax
     pop rax
 
-    test rax, rax
+    test r11, r11
     jz  .bs_found
     jl  .bs_right
 
@@ -637,8 +665,8 @@ atexit:
     mov rax, [_atexit_count]
     cmp rax, 32
     jge .fail
-    lea rdx, [_atexit_table + rax * 8]
-    mov [rdx], rcx
+    lea rdx, [_atexit_table]
+    mov [rdx + rax * 8], rcx
     inc qword [_atexit_count]
     xor rax, rax
     ret
@@ -658,7 +686,8 @@ _run_atexit:
     test rbx, rbx
     jz  .done
     dec rbx
-    mov rax, [_atexit_table + rbx * 8]
+    lea rdx, [_atexit_table]
+    mov rax, [rdx + rbx * 8]
     call rax
     jmp .loop
 .done:
