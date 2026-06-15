@@ -12,6 +12,9 @@ io_written      dd 0
 io_read         dd 0
 io_buf          times 64 db 0
 printf_buf      times 32 db 0
+printf_f_half   dq 0.5
+printf_f_zero   dq 0.0
+printf_f_sign   dq 0x8000000000000000
 io_newline      db 0x0A
 
 section .text
@@ -275,6 +278,31 @@ printf:
 
 .format:
     inc r12
+    mov qword [rbp - 40], 6
+    movzx rax, byte [r12]
+    cmp al, '.'
+    jne .format_spec
+    inc r12
+    xor r10d, r10d
+.precision_loop:
+    movzx eax, byte [r12]
+    cmp al, '0'
+    jb .precision_done
+    cmp al, '9'
+    ja .precision_done
+    imul r10d, r10d, 10
+    sub al, '0'
+    movzx eax, al
+    add r10d, eax
+    inc r12
+    jmp .precision_loop
+.precision_done:
+    cmp r10d, 15
+    jbe .precision_store
+    mov r10d, 15
+.precision_store:
+    mov [rbp - 40], r10
+.format_spec:
     movzx rax, byte [r12]
     inc r12
     cmp al, '%'
@@ -289,6 +317,8 @@ printf:
     je  .print_uint
     cmp al, 'x'
     je  .print_hex
+    cmp al, 'f'
+    je  .print_float
     jmp .next_char
 
 .print_percent:
@@ -334,6 +364,12 @@ printf:
     call .get_arg
     mov rcx, rax
     call .write_hex
+    jmp .next_char
+
+.print_float:
+    call .get_arg
+    movq xmm0, rax
+    call .write_float
     jmp .next_char
 
 .done:
@@ -444,6 +480,69 @@ printf:
     ret
 
 ;----------------------------------------------------------
+.write_float:
+    sub rsp, 72
+    ucomisd xmm0, [printf_f_zero]
+    jae .float_abs
+    xorpd xmm0, [printf_f_sign]
+    mov rcx, '-'
+    call putchar
+    inc r14
+.float_abs:
+    mov r9, [rbp - 40]
+    mov [rsp + 48], r9
+    mov r10, 1
+    mov rcx, r9
+.float_scale_loop:
+    test rcx, rcx
+    jz .float_scale_done
+    imul r10, r10, 10
+    dec rcx
+    jmp .float_scale_loop
+.float_scale_done:
+    cvtsi2sd xmm2, r10
+    movsd xmm1, [printf_f_half]
+    divsd xmm1, xmm2
+    addsd xmm0, xmm1
+    cvttsd2si rcx, xmm0
+    mov [rsp + 40], rcx
+    cvtsi2sd xmm1, rcx
+    subsd xmm0, xmm1
+    mulsd xmm0, xmm2
+    cvttsd2si r8, xmm0
+    mov [rsp + 56], r8
+    mov rcx, [rsp + 40]
+    call .write_unsigned
+    mov r9, [rsp + 48]
+    test r9, r9
+    jz .float_done
+    mov rcx, '.'
+    call putchar
+    inc r14
+    mov r9, [rsp + 48]
+    lea r11, [printf_buf + 31]
+    mov byte [r11], 0
+    mov rax, [rsp + 56]
+    mov rcx, r9
+.float_frac_loop:
+    xor rdx, rdx
+    mov r8, 10
+    div r8
+    add dl, '0'
+    dec r11
+    mov [r11], dl
+    dec rcx
+    jnz .float_frac_loop
+    mov rcx, rbx
+    mov rdx, r11
+    mov r8, [rsp + 48]
+    lea r9, [io_written]
+    mov qword [rsp + 32], 0
+    call WriteFile
+    add r14, [rsp + 48]
+.float_done:
+    add rsp, 72
+    ret
 ; printf_s - secure CRT compatible alias for printf subset
 ; rcx = format string
 ;----------------------------------------------------------

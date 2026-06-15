@@ -13,7 +13,9 @@ _two        dq 2.0
 _half       dq 0.5
 _nan        dq 0x7FF8000000000000
 _inf        dq 0x7FF0000000000000
+align 16
 _abs_mask   dq 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF
+align 16
 _sign_mask  dq 0x8000000000000000, 0
 
 section .text
