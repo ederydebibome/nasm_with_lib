@@ -2653,6 +2653,23 @@ static Token *tlist_filename(Token **tp, Token **otp, const char *dname)
     *tp = t = expand_smacro_noreset(*tp);
 
     t = skip_white(t);
+
+    /* accept <filename> in addition to "filename" or 'filename' */
+    if (t && t->type == '<') {
+        char buf[1024] = {0};
+        Token *s = t->next;
+        while (s && s->type != '>') {
+            const char *txt = tok_text(s);
+            if (txt)
+                strncat(buf, txt, sizeof(buf) - strlen(buf) - 1);
+            s = s->next;
+        }
+        if (otp)
+            *otp = t;
+        t = new_Token(NULL, TOKEN_INTERNAL_STR, buf, 0);
+        return t;
+    }
+
     if (!tok_string(t)) {
         if (otp)
             *otp = NULL;
