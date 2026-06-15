@@ -2,6 +2,7 @@
 ; Windows x64 - Microsoft calling convention
 ; mirrors <math.h>
 ; maximally optimized: x87 FPU + SSE4.1 hardware instructions
+default rel
 
 section .data
 _pi         dq 3.14159265358979323846

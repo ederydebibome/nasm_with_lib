@@ -2,6 +2,7 @@
 ; Windows x64 - Microsoft calling convention
 ; mirrors <time.h>
 ; maximally optimized: direct Win32 API, minimal overhead
+default rel
 
 extern GetSystemTimeAsFileTime
 extern GetLocalTime
@@ -394,7 +395,8 @@ asctime:
     ; day name
     mov eax, [r12 + 24]         ; tm_wday
     imul eax, 3
-    lea rcx, [_day_names + rax]
+    lea rcx, [_day_names]
+    add rcx, rax
     mov al, [rcx]
     mov [rbx], al
     mov al, [rcx + 1]
@@ -406,7 +408,8 @@ asctime:
     ; month name
     mov eax, [r12 + 16]         ; tm_mon
     imul eax, 3
-    lea rcx, [_mon_names + rax]
+    lea rcx, [_mon_names]
+    add rcx, rax
     mov al, [rcx]
     mov [rbx + 4], al
     mov al, [rcx + 1]
@@ -628,7 +631,8 @@ strftime:
 .sf_dayname:
     mov eax, [r15 + 24]
     imul eax, 3
-    lea rbx, [_day_names + rax]
+    lea rbx, [_day_names]
+    add rbx, rax
     mov al, [rbx]
     call .write_char
     mov al, [rbx + 1]
@@ -640,7 +644,8 @@ strftime:
 .sf_monname:
     mov eax, [r15 + 16]
     imul eax, 3
-    lea rbx, [_mon_names + rax]
+    lea rbx, [_mon_names]
+    add rbx, rax
     mov al, [rbx]
     call .write_char
     mov al, [rbx + 1]

@@ -26,12 +26,14 @@ section .text
 ;----------------------------------------------------------
 global malloc
 malloc:
-    push rcx
+    sub rsp, 40
+    mov [rsp + 32], rcx
     call GetProcessHeap
-    pop r8
+    mov r8, [rsp + 32]
     mov rcx, rax
     xor rdx, rdx
     call HeapAlloc
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -43,12 +45,14 @@ malloc:
 global calloc
 calloc:
     imul rcx, rdx
-    push rcx
+    sub rsp, 40
+    mov [rsp + 32], rcx
     call GetProcessHeap
-    pop r8
+    mov r8, [rsp + 32]
     mov rcx, rax
     mov rdx, 8
     call HeapAlloc
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -61,16 +65,19 @@ global realloc
 realloc:
     test rcx, rcx
     jz  .alloc_new
-    push rcx
-    push rdx
+    sub rsp, 40
+    mov [rsp + 32], rcx
+    mov [rsp + 24], rdx
     call GetProcessHeap
-    pop r9
-    mov r8, rcx
+    mov r9, [rsp + 24]
+    mov r8, [rsp + 32]
     mov rcx, rax
     xor rdx, rdx
     call HeapReAlloc
+    add rsp, 40
     ret
 .alloc_new:
+    mov rcx, rdx
     call malloc
     ret
 
@@ -82,12 +89,14 @@ global free
 free:
     test rcx, rcx
     jz  .done
-    push rcx
+    sub rsp, 40
+    mov [rsp + 32], rcx
     call GetProcessHeap
-    pop r8
+    mov r8, [rsp + 32]
     mov rcx, rax
     xor rdx, rdx
     call HeapFree
+    add rsp, 40
 .done:
     ret
 
@@ -594,6 +603,7 @@ global getenv
 getenv:
     push rbx
     push r12
+    sub rsp, 40
     mov r12, rcx
 
     ; get required size
@@ -603,29 +613,29 @@ getenv:
     test rax, rax
     jz  .fail
 
-    push rax
+    mov [rsp + 32], rax
     mov rcx, rax
     call malloc
     test rax, rax
-    jz  .fail_pop
+    jz  .fail
     mov rbx, rax
 
-    pop r8
     mov rcx, r12
     mov rdx, rbx
+    mov r8, [rsp + 32]
     call GetEnvironmentVariableA
     test rax, rax
     jz  .fail_free
 
     mov rax, rbx
+    add rsp, 40
     pop r12
     pop rbx
     ret
 
-.fail_pop:
-    pop rax
 .fail:
     xor rax, rax
+    add rsp, 40
     pop r12
     pop rbx
     ret
@@ -634,6 +644,7 @@ getenv:
     mov rcx, rbx
     call free
     xor rax, rax
+    add rsp, 40
     pop r12
     pop rbx
     ret
@@ -646,13 +657,16 @@ getenv:
 ;----------------------------------------------------------
 global setenv
 setenv:
+    sub rsp, 40
     call SetEnvironmentVariableA
     test rax, rax
     jz  .fail
     xor rax, rax
+    add rsp, 40
     ret
 .fail:
     or rax, -1
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------

@@ -1,5 +1,6 @@
 ; userlib/win64/process.asm
 ; Windows x64 - Microsoft calling convention
+default rel
 
 extern ExitProcess
 extern GetCurrentProcessId

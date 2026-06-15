@@ -72,20 +72,26 @@ puts:
 global putchar
 putchar:
     push rbx
-    push rcx
+    sub rsp, 48
+    mov byte [rsp + 40], cl
     mov rcx, -11
     call GetStdHandle
     mov rbx, rax
-    pop rcx
-    sub rsp, 8
-    mov byte [rsp], cl
     mov rcx, rbx
-    lea rdx, [rsp]
+    lea rdx, [rsp + 40]
     mov r8, 1
     lea r9, [io_written]
+    mov qword [rsp + 32], 0
     call WriteFile
-    movzx rax, byte [rsp]
-    add rsp, 8
+    test rax, rax
+    jz .fail
+    movzx rax, byte [rsp + 40]
+    add rsp, 48
+    pop rbx
+    ret
+.fail:
+    or rax, -1
+    add rsp, 48
     pop rbx
     ret
 
@@ -96,26 +102,25 @@ putchar:
 global getchar
 getchar:
     push rbx
+    sub rsp, 48
     mov rcx, -10
     call GetStdHandle
     mov rbx, rax
-    sub rsp, 8
     mov rcx, rbx
-    lea rdx, [rsp]
+    lea rdx, [rsp + 40]
     mov r8, 1
     lea r9, [io_read]
-    push 0
+    mov qword [rsp + 32], 0
     call ReadFile
-    pop rcx
     test rax, rax
     jz  .fail
-    movzx rax, byte [rsp]
-    add rsp, 8
+    movzx rax, byte [rsp + 40]
+    add rsp, 48
     pop rbx
     ret
 .fail:
-    add rsp, 8
     or rax, -1
+    add rsp, 48
     pop rbx
     ret
 
@@ -129,24 +134,22 @@ gets:
     push rbx
     push r12
     push r13
+    sub rsp, 48
     mov r12, rcx
     xor r13, r13
     mov rcx, -10
     call GetStdHandle
     mov rbx, rax
 .loop:
-    sub rsp, 8
     mov rcx, rbx
-    lea rdx, [rsp]
+    lea rdx, [rsp + 40]
     mov r8, 1
     lea r9, [io_read]
-    push 0
+    mov qword [rsp + 32], 0
     call ReadFile
-    pop rcx
     test rax, rax
     jz  .fail
-    movzx rax, byte [rsp]
-    add rsp, 8
+    movzx rax, byte [rsp + 40]
     cmp al, 0x0A
     je  .done
     cmp al, 0x0D
@@ -157,13 +160,74 @@ gets:
 .done:
     mov byte [r12 + r13], 0
     mov rax, r12
+    add rsp, 48
     pop r13
     pop r12
     pop rbx
     ret
 .fail:
-    add rsp, 8
     xor rax, rax
+    add rsp, 48
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+;----------------------------------------------------------
+; gets_s - read line with bounds
+; rcx = buffer, rdx = buffer size
+; returns rax = buffer or 0 on failure
+;----------------------------------------------------------
+global gets_s
+gets_s:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 48
+    test rcx, rcx
+    jz .fail
+    cmp rdx, 1
+    jb .fail
+    mov r12, rcx
+    mov r14, rdx
+    dec r14
+    xor r13, r13
+    mov rcx, -10
+    call GetStdHandle
+    mov rbx, rax
+.loop:
+    cmp r13, r14
+    jae .done
+    mov rcx, rbx
+    lea rdx, [rsp + 40]
+    mov r8, 1
+    lea r9, [io_read]
+    mov qword [rsp + 32], 0
+    call ReadFile
+    test rax, rax
+    jz .fail
+    movzx eax, byte [rsp + 40]
+    cmp al, 0x0A
+    je .done
+    cmp al, 0x0D
+    je .loop
+    mov [r12 + r13], al
+    inc r13
+    jmp .loop
+.done:
+    mov byte [r12 + r13], 0
+    mov rax, r12
+    add rsp, 48
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.fail:
+    xor eax, eax
+    add rsp, 48
+    pop r14
     pop r13
     pop r12
     pop rbx
@@ -193,6 +257,9 @@ printf:
     mov [rbp - 48], r9
     xor r13, r13
     xor r14, r14
+    mov rcx, -11
+    call GetStdHandle
+    mov rbx, rax
 
 .next_char:
     movzx rax, byte [r12]
@@ -244,24 +311,22 @@ printf:
     call strlen
     add r14, rax
     mov r8, rax
-    mov rcx, -11
-    call GetStdHandle
-    mov rbx, rax
     mov rcx, rbx
     mov rdx, r15
     lea r9, [io_written]
+    mov qword [rsp + 32], 0
     call WriteFile
     jmp .next_char
 
 .print_int:
     call .get_arg
-    mov rcx, rax
+    movsxd rcx, eax
     call .write_signed
     jmp .next_char
 
 .print_uint:
     call .get_arg
-    mov rcx, rax
+    mov ecx, eax
     call .write_unsigned
     jmp .next_char
 
@@ -292,7 +357,7 @@ printf:
     mov rax, r13
     sub rax, 3
     imul rax, 8
-    add rax, 16
+    add rax, 48
     mov rax, [rbp + rax]
     inc r13
     ret
@@ -320,6 +385,7 @@ printf:
     neg rcx
 
 .write_unsigned:
+    sub rsp, 40
     lea rdi, [printf_buf + 31]
     mov byte [rdi], 0
     mov rax, rcx
@@ -332,21 +398,21 @@ printf:
     mov byte [rdi], dl
     test rax, rax
     jnz .udiv_loop
-    push rdi
     mov rcx, rdi
     call strlen
     add r14, rax
     mov r8, rax
-    mov rcx, -11
-    call GetStdHandle
-    mov rbx, rax
+    mov r15, rdi
     mov rcx, rbx
-    pop rdx
+    mov rdx, r15
     lea r9, [io_written]
+    mov qword [rsp + 32], 0
     call WriteFile
+    add rsp, 40
     ret
 
 .write_hex:
+    sub rsp, 40
     lea rdi, [printf_buf + 31]
     mov byte [rdi], 0
     mov rax, rcx
@@ -364,19 +430,26 @@ printf:
     mov byte [rdi], cl
     shr rax, 4
     jnz .hex_loop
-    push rdi
     mov rcx, rdi
     call strlen
     add r14, rax
     mov r8, rax
-    mov rcx, -11
-    call GetStdHandle
-    mov rbx, rax
+    mov r15, rdi
     mov rcx, rbx
-    pop rdx
+    mov rdx, r15
     lea r9, [io_written]
+    mov qword [rsp + 32], 0
     call WriteFile
+    add rsp, 40
     ret
+
+;----------------------------------------------------------
+; printf_s - secure CRT compatible alias for printf subset
+; rcx = format string
+;----------------------------------------------------------
+global printf_s
+printf_s:
+    jmp printf
 
 ;----------------------------------------------------------
 ; sprintf - formatted output to string
@@ -461,15 +534,20 @@ sprintf:
 
 .sp_int:
     call .sp_get_arg
-    mov rcx, rax
+    movsxd rcx, eax
     test rcx, rcx
-    jns .sp_uint
+    jns .sp_write_uint
     mov byte [r15], '-'
     inc r15
     inc r14
     neg rcx
+    jmp .sp_write_uint
 
 .sp_uint:
+    call .sp_get_arg
+    mov ecx, eax
+
+.sp_write_uint:
     lea rdi, [printf_buf + 31]
     mov byte [rdi], 0
     mov rax, rcx
@@ -540,7 +618,7 @@ sprintf:
     mov rax, r13
     sub rax, 2
     imul rax, 8
-    add rax, 16
+    add rax, 48
     mov rax, [rbp + rax]
     inc r13
     ret
@@ -552,6 +630,30 @@ sprintf:
     mov rax, [rbp - 56]
     inc r13
     ret
+
+;----------------------------------------------------------
+; sprintf_s - bounded sprintf
+; rcx = buffer, rdx = buffer size, r8 = format, r9... = args
+; returns rax = chars written, -1 on invalid buffer/size
+;----------------------------------------------------------
+global sprintf_s
+sprintf_s:
+    test rcx, rcx
+    jz .fail
+    test rdx, rdx
+    jz .fail
+    mov rdx, r8
+    mov r8, r9
+    mov r9, [rsp + 40]
+    jmp sprintf
+.fail:
+    or rax, -1
+    ret
+
+; snprintf_s: for this library, same bounded behavior as sprintf_s.
+global snprintf_s
+snprintf_s:
+    jmp snprintf
 
 ;----------------------------------------------------------
 ; snprintf - sprintf with size limit
@@ -684,7 +786,7 @@ snprintf:
     mov rax, r13
     sub rax, 1
     imul rax, 8
-    add rax, 16
+    add rax, 48
     mov rax, [rbp + rax]
     inc r13
     ret
@@ -708,6 +810,7 @@ scanf:
     push r12
     push r13
     push r14
+    push r15
     sub rsp, 64
 
     mov r12, rcx
@@ -720,6 +823,22 @@ scanf:
     mov rcx, -10
     call GetStdHandle
     mov rbx, rax        ; stdin handle
+
+    mov rcx, rbx
+    lea rdx, [io_buf]
+    mov r8, 63
+    lea r9, [io_read]
+    mov qword [rsp + 32], 0
+    call ReadFile
+    test rax, rax
+    jz .sc_done
+    mov eax, [io_read]
+    cmp eax, 63
+    jbe .sc_len_ok
+    mov eax, 63
+.sc_len_ok:
+    lea r15, [io_buf]
+    mov byte [r15 + rax], 0
 
 .sc_next:
     movzx rax, byte [r12]
@@ -740,23 +859,40 @@ scanf:
     jmp .sc_next
 
 .sc_skip_fmt:
+    cmp al, ' '
+    je .sc_skip_input_ws
+    cmp al, 9
+    je .sc_skip_input_ws
+    cmp al, 10
+    je .sc_skip_input_ws
+    cmp al, 13
+    je .sc_skip_input_ws
     inc r12
     jmp .sc_next
+.sc_skip_input_ws:
+    inc r12
+.sc_skip_input_loop:
+    mov al, [r15]
+    cmp al, ' '
+    je .sc_skip_input_one
+    cmp al, 9
+    je .sc_skip_input_one
+    cmp al, 10
+    je .sc_skip_input_one
+    cmp al, 13
+    jne .sc_next
+.sc_skip_input_one:
+    inc r15
+    jmp .sc_skip_input_loop
 
 .sc_char:
     call .sc_get_arg
     mov r11, rax
-    sub rsp, 8
-    mov rcx, rbx
-    lea rdx, [rsp]
-    mov r8, 1
-    lea r9, [io_read]
-    push 0
-    call ReadFile
-    pop rcx
-    movzx rax, byte [rsp]
-    add rsp, 8
-    mov byte [r11], al
+    mov al, [r15]
+    test al, al
+    jz .sc_done
+    mov [r11], al
+    inc r15
     inc r14
     jmp .sc_next
 
@@ -764,25 +900,34 @@ scanf:
     call .sc_get_arg
     mov r11, rax
     xor r10, r10
-.sc_str_loop:
-    sub rsp, 8
-    mov rcx, rbx
-    lea rdx, [rsp]
-    mov r8, 1
-    lea r9, [io_read]
-    push 0
-    call ReadFile
-    pop rcx
-    movzx rax, byte [rsp]
-    add rsp, 8
+.sc_str_skip:
+    mov al, [r15]
     cmp al, ' '
+    je .sc_str_skip_one
+    cmp al, 9
+    je .sc_str_skip_one
+    cmp al, 10
+    je .sc_str_skip_one
+    cmp al, 13
+    jne .sc_str_loop
+.sc_str_skip_one:
+    inc r15
+    jmp .sc_str_skip
+.sc_str_loop:
+    mov al, [r15]
+    test al, al
+    jz .sc_str_done
+    cmp al, ' '
+    je  .sc_str_done
+    cmp al, 9
     je  .sc_str_done
     cmp al, 0x0A
     je  .sc_str_done
     cmp al, 0x0D
-    je  .sc_str_loop
+    je  .sc_str_done
     mov byte [r11 + r10], al
     inc r10
+    inc r15
     jmp .sc_str_loop
 .sc_str_done:
     mov byte [r11 + r10], 0
@@ -793,23 +938,27 @@ scanf:
     call .sc_get_arg
     mov r11, rax
     xor r10, r10        ; result
-    xor r15, r15        ; negative flag
-.sc_int_loop:
-    sub rsp, 8
-    mov rcx, rbx
-    lea rdx, [rsp]
-    mov r8, 1
-    lea r9, [io_read]
-    push 0
-    call ReadFile
-    pop rcx
-    movzx rax, byte [rsp]
-    add rsp, 8
+    xor rbx, rbx        ; negative flag
+.sc_int_skip:
+    mov al, [r15]
+    cmp al, ' '
+    je .sc_int_skip_one
+    cmp al, 9
+    je .sc_int_skip_one
+    cmp al, 10
+    je .sc_int_skip_one
+    cmp al, 13
+    jne .sc_int_sign
+.sc_int_skip_one:
+    inc r15
+    jmp .sc_int_skip
+.sc_int_sign:
     cmp al, '-'
-    jne .sc_int_digit
-    mov r15, 1
-    jmp .sc_int_loop
-.sc_int_digit:
+    jne .sc_int_loop
+    mov rbx, 1
+    inc r15
+.sc_int_loop:
+    movzx rax, byte [r15]
     cmp al, '0'
     jl  .sc_int_done
     cmp al, '9'
@@ -817,19 +966,21 @@ scanf:
     sub al, '0'
     imul r10, 10
     add r10, rax
+    inc r15
     jmp .sc_int_loop
 .sc_int_done:
-    test r15, r15
+    test rbx, rbx
     jz  .sc_int_store
     neg r10
 .sc_int_store:
-    mov [r11], r10
+    mov [r11], r10d
     inc r14
     jmp .sc_next
 
 .sc_done:
     mov rax, r14
     add rsp, 64
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -847,7 +998,7 @@ scanf:
     mov rax, r13
     sub rax, 3
     imul rax, 8
-    add rax, 16
+    add rax, 48
     mov rax, [rbp + rax]
     inc r13
     ret
@@ -863,6 +1014,14 @@ scanf:
     mov rax, [rbp - 48]
     inc r13
     ret
+
+;----------------------------------------------------------
+; scanf_s - currently compatible with scanf for %d and simple %s/%c.
+; NOTE: Microsoft scanf_s size arguments for %s/%c are not consumed yet.
+;----------------------------------------------------------
+global scanf_s
+scanf_s:
+    jmp scanf
 
 ; userlib/win64/file.asm
 ; Windows x64 - Microsoft calling convention
@@ -907,22 +1066,23 @@ extern free
 extern strcmp
 
 _file_alloc:
+    sub rsp, 40
     mov rcx, FILE_SIZE
     call malloc
     test rax, rax
     jz  .fail
-    ; zero out struct
-    push rax
+    mov [rsp + 32], rax
     mov rcx, rax
     xor rdx, rdx
     mov r8, FILE_SIZE
     call memset
-    pop rax
-    ; set ungetc_buf to -1
+    mov rax, [rsp + 32]
     mov qword [rax + 16], -1
+    add rsp, 40
     ret
 .fail:
     xor rax, rax
+    add rsp, 40
     ret
 
 extern memset
@@ -942,7 +1102,7 @@ fopen:
     push r13
     push r14
     push r15
-    sub rsp, 64
+    sub rsp, 72
 
     mov r12, rcx        ; filename
     mov r13, rdx        ; mode
@@ -1026,7 +1186,7 @@ fopen:
     pop rax
 
 .done:
-    add rsp, 64
+    add rsp, 72
     pop r15
     pop r14
     pop r13
@@ -1041,11 +1201,45 @@ fopen:
     call CloseHandle
 .fail:
     xor rax, rax
-    add rsp, 64
+    add rsp, 72
     pop r15
     pop r14
     pop r13
     pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;----------------------------------------------------------
+; fopen_s - open file and store FILE*
+; rcx = FILE **out
+; rdx = filename
+; r8  = mode
+; returns rax = 0 on success, -1 on failure
+;----------------------------------------------------------
+global fopen_s
+fopen_s:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    sub rsp, 40
+    test rcx, rcx
+    jz .fs_fail
+    mov rbx, rcx
+    mov rcx, rdx
+    mov rdx, r8
+    call fopen
+    test rax, rax
+    jz .fs_fail
+    mov [rbx], rax
+    xor eax, eax
+    add rsp, 40
+    pop rbx
+    pop rbp
+    ret
+.fs_fail:
+    mov rax, -1
+    add rsp, 40
     pop rbx
     pop rbp
     ret
@@ -1110,9 +1304,10 @@ fread:
     mov rdx, r12        ; buffer
     mov r8, r14         ; bytes to read
     lea r9, [file_read]
-    push 0
+    sub rsp, 40
+    mov qword [rsp + 32], 0
     call ReadFile
-    pop rcx
+    add rsp, 40
     test rax, rax
     jz  .eof
     mov rax, [file_read]
@@ -1160,9 +1355,10 @@ fwrite:
     mov rcx, [rbx]      ; handle
     mov rdx, r12
     lea r9, [file_written]
-    push 0
+    sub rsp, 48
+    mov qword [rsp + 32], 0
     call WriteFile
-    pop rcx
+    add rsp, 48
     test rax, rax
     jz  .fail
     mov rax, [file_written]
@@ -1202,9 +1398,10 @@ fgetc:
     lea rdx, [rsp]
     mov r8, 1
     lea r9, [file_read]
-    push 0
+    sub rsp, 40
+    mov qword [rsp + 32], 0
     call ReadFile
-    pop rcx
+    add rsp, 40
     test rax, rax
     jz  .eof
     movzx rax, byte [rsp]
@@ -1236,9 +1433,10 @@ fputc:
     lea rdx, [rsp]
     mov r8, 1
     lea r9, [file_written]
-    push 0
+    sub rsp, 48
+    mov qword [rsp + 32], 0
     call WriteFile
-    pop rcx
+    add rsp, 48
     test rax, rax
     jz  .fail
     movzx rax, r12b
