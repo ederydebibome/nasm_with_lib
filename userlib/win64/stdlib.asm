@@ -107,9 +107,8 @@ free:
 ;----------------------------------------------------------
 global atoi
 atoi:
-    push rbx
-    xor rax, rax
-    xor rbx, rbx        ; negative flag
+    xor eax, eax
+    xor r8d, r8d        ; negative flag
     ; skip whitespace
 .skip_ws:
     movzx rdx, byte [rcx]
@@ -124,7 +123,7 @@ atoi:
 .check_sign:
     cmp dl, '-'
     jne .check_plus
-    mov rbx, 1
+    mov r8d, 1
     inc rcx
     jmp .digits
 .check_plus:
@@ -143,11 +142,10 @@ atoi:
     inc rcx
     jmp .digits
 .done:
-    test rbx, rbx
+    test r8d, r8d
     jz  .positive
     neg rax
 .positive:
-    pop rbx
     ret
 
 ;----------------------------------------------------------
@@ -395,7 +393,7 @@ qsort:
     push r15
     push rdi
     push rsi
-    sub rsp, 48
+    sub rsp, 56
 
     mov r12, rcx        ; base
     mov r13, rdx        ; count
@@ -414,7 +412,7 @@ qsort:
     add rax, r12        ; pivot pointer
     mov rdi, rax
 
-    xor rbx, rbx        ; i = -1 (store index)
+    mov rbx, -1         ; i = -1 (store index)
     xor rsi, rsi        ; j = 0
 
 .qs_loop:
@@ -483,7 +481,7 @@ qsort:
     call qsort
 
 .qs_done:
-    add rsp, 48
+    add rsp, 56
     pop rsi
     pop rdi
     pop r15
@@ -518,85 +516,75 @@ qsort:
 ; rdx = base pointer
 ; r8  = number of elements
 ; r9  = element size
-; [rsp+32] = compare function pointer
+; [rsp+40] = compare function pointer
 ; returns rax = pointer to match or 0
 ;----------------------------------------------------------
 global bsearch
 bsearch:
-    push rbp
-    mov rbp, rsp
+    mov r11, [rsp + 40] ; compare fn before stack frame moves
     push rbx
     push r12
     push r13
     push r14
     push r15
-    sub rsp, 48
+    push rdi
+    sub rsp, 40
 
     mov r12, rcx        ; key
     mov r13, rdx        ; base
-    mov r14, r8         ; count
+    mov r14, r8         ; hi = count
     mov r15, r9         ; size
-    mov rbx, [rbp + 48] ; compare fn
-
-    xor rdi, rdi        ; lo = 0
+    mov rbx, r11        ; compare fn
+    xor edi, edi        ; lo = 0
 
 .bs_loop:
     cmp rdi, r14
-    jge .bs_notfound
+    jae .bs_notfound
 
     mov rax, rdi
     add rax, r14
     shr rax, 1          ; mid = (lo + hi) / 2
+    mov [rsp + 32], rax
 
-    push rax
     imul rax, r15
     add rax, r13        ; &base[mid]
     mov rcx, r12
     mov rdx, rax
     call rbx
-    mov r11, rax
-    pop rax
+    movsxd r11, eax
+    mov rax, [rsp + 32]
 
     test r11, r11
     jz  .bs_found
-    jl  .bs_right
+    js  .bs_left
 
-    ; go left: hi = mid
-    mov r14, rax
+    lea rdi, [rax + 1]  ; cmp > 0: key is after mid
     jmp .bs_loop
 
-.bs_right:
-    ; go right: lo = mid + 1
-    mov rdi, rax
-    inc rdi
+.bs_left:
+    mov r14, rax        ; cmp < 0: key is before mid
     jmp .bs_loop
 
 .bs_found:
     imul rax, r15
     add rax, r13
-    add rsp, 48
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-    pop rbp
-    ret
+    jmp .bs_done
 
 .bs_notfound:
-    xor rax, rax
-    add rsp, 48
+    xor eax, eax
+
+.bs_done:
+    add rsp, 40
+    pop rdi
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
-    pop rbp
     ret
 
 ;----------------------------------------------------------
-; getenv - get environment variable
-; rcx = name
+; getenv - get environment variable; rcx = name
 ; returns rax = pointer to value or 0
 ;----------------------------------------------------------
 global getenv

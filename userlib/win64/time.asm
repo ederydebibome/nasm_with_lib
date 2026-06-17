@@ -52,27 +52,22 @@ section .text
 ;----------------------------------------------------------
 global time
 time:
-    push rbx
-    push rcx
-    ; GetSystemTimeAsFileTime → FILETIME
+    sub rsp, 56
+    mov [rsp + 40], rcx
     lea rcx, [_ft]
     call GetSystemTimeAsFileTime
-    ; load FILETIME as 64-bit value
     mov rax, [_ft]
-    ; subtract epoch offset
-    mov rbx, EPOCH_DIFF
-    sub rax, rbx
-    ; convert 100ns → seconds
-    mov rbx, 10000000
-    xor rdx, rdx
-    div rbx
-    ; store if pointer provided
-    pop rcx
+    mov r8, EPOCH_DIFF
+    sub rax, r8
+    mov ecx, 10000000
+    xor edx, edx
+    div rcx
+    mov rcx, [rsp + 40]
     test rcx, rcx
     jz  .done
     mov [rcx], rax
 .done:
-    pop rbx
+    add rsp, 56
     ret
 
 ;----------------------------------------------------------
@@ -81,19 +76,16 @@ time:
 ;----------------------------------------------------------
 global clock
 clock:
-    ; RDTSC gives raw cycle count — use GetTickCount64 for
-    ; millisecond precision matching CLOCKS_PER_SEC = 1000
-    push rbx
+    sub rsp, 40
     lea rcx, [_ft]
     call GetSystemTimeAsFileTime
     mov rax, [_ft]
-    mov rbx, EPOCH_DIFF
-    sub rax, rbx
-    ; convert 100ns → milliseconds
-    mov rbx, 10000
-    xor rdx, rdx
-    div rbx
-    pop rbx
+    mov r8, EPOCH_DIFF
+    sub rax, r8
+    mov ecx, 10000
+    xor edx, edx
+    div rcx
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -121,6 +113,7 @@ gmtime:
     push r13
     push r14
     push r15
+    sub rsp, 32
 
     mov r12, [rcx]          ; time_t value
 
@@ -138,24 +131,24 @@ gmtime:
     call FileTimeToSystemTime
 
     ; fill tm struct from SYSTEMTIME
-    lea rdi, [_tm]
+    lea r11, [_tm]
 
     movzx eax, word [_st + 12] ; wSecond
-    mov [rdi + 0], eax
+    mov [r11 + 0], eax
     movzx eax, word [_st + 10] ; wMinute
-    mov [rdi + 4], eax
+    mov [r11 + 4], eax
     movzx eax, word [_st + 8]  ; wHour
-    mov [rdi + 8], eax
+    mov [r11 + 8], eax
     movzx eax, word [_st + 6]  ; wDay
-    mov [rdi + 12], eax
+    mov [r11 + 12], eax
     movzx eax, word [_st + 2]  ; wMonth (1-based → 0-based)
     dec eax
-    mov [rdi + 16], eax
+    mov [r11 + 16], eax
     movzx eax, word [_st + 0]  ; wYear - 1900
     sub eax, 1900
-    mov [rdi + 20], eax
+    mov [r11 + 20], eax
     movzx eax, word [_st + 4]  ; wDayOfWeek
-    mov [rdi + 24], eax
+    mov [r11 + 24], eax
 
     ; compute tm_yday
     movzx r13, word [_st + 2]   ; month 1-based
@@ -198,12 +191,13 @@ gmtime:
 .store_yday:
     add eax, r15d
     dec eax
-    mov [rdi + 28], eax
+    mov [r11 + 28], eax
 
     ; tm_isdst = 0 (UTC has no DST)
-    mov dword [rdi + 32], 0
+    mov dword [r11 + 32], 0
 
     lea rax, [_tm]
+    add rsp, 32
     pop r15
     pop r14
     pop r13
@@ -223,6 +217,7 @@ localtime:
     push r13
     push r14
     push r15
+    sub rsp, 32
 
     mov r12, [rcx]
 
@@ -246,24 +241,24 @@ localtime:
     call SystemTimeToTzSpecificLocalTime
 
     ; fill tm struct
-    lea rdi, [_tm]
+    lea r11, [_tm]
 
     movzx eax, word [_st + 12]
-    mov [rdi + 0], eax
+    mov [r11 + 0], eax
     movzx eax, word [_st + 10]
-    mov [rdi + 4], eax
+    mov [r11 + 4], eax
     movzx eax, word [_st + 8]
-    mov [rdi + 8], eax
+    mov [r11 + 8], eax
     movzx eax, word [_st + 6]
-    mov [rdi + 12], eax
+    mov [r11 + 12], eax
     movzx eax, word [_st + 2]
     dec eax
-    mov [rdi + 16], eax
+    mov [r11 + 16], eax
     movzx eax, word [_st + 0]
     sub eax, 1900
-    mov [rdi + 20], eax
+    mov [r11 + 20], eax
     movzx eax, word [_st + 4]
-    mov [rdi + 24], eax
+    mov [r11 + 24], eax
 
     ; tm_yday
     movzx r13, word [_st + 2]
@@ -303,10 +298,11 @@ localtime:
 .store_yday:
     add eax, r15d
     dec eax
-    mov [rdi + 28], eax
-    mov dword [rdi + 32], -1    ; tm_isdst = -1 (unknown)
+    mov [r11 + 28], eax
+    mov dword [r11 + 32], -1    ; tm_isdst = -1 (unknown)
 
     lea rax, [_tm]
+    add rsp, 32
     pop r15
     pop r14
     pop r13
@@ -324,6 +320,7 @@ mktime:
     push rbx
     push r12
     push r13
+    sub rsp, 32
     mov r12, rcx
 
     ; fill SYSTEMTIME from tm
@@ -360,6 +357,7 @@ mktime:
     xor rdx, rdx
     div rbx
 
+    add rsp, 32
     pop r13
     pop r12
     pop rbx
@@ -367,6 +365,7 @@ mktime:
 
 .fail:
     or rax, -1
+    add rsp, 32
     pop r13
     pop r12
     pop rbx
@@ -497,9 +496,11 @@ asctime:
 ;----------------------------------------------------------
 global ctime
 ctime:
+    sub rsp, 40
     call gmtime
     mov rcx, rax
     call asctime
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -521,7 +522,7 @@ strftime:
     push r15
     push rdi
     push rsi
-    sub rsp, 32
+    sub rsp, 40
 
     mov r12, rcx            ; buffer
     mov r13, rdx            ; max size
@@ -665,7 +666,7 @@ strftime:
     mov byte [rdi], 0
 .sf_null:
     mov rax, rsi
-    add rsp, 32
+    add rsp, 40
     pop rsi
     pop rdi
     pop r15

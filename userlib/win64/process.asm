@@ -29,7 +29,9 @@ section .text
 ;----------------------------------------------------------
 global exit
 exit:
+    sub rsp, 40
     call ExitProcess
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -37,8 +39,10 @@ exit:
 ;----------------------------------------------------------
 global abort
 abort:
-    mov rcx, 3
+    sub rsp, 40
+    mov ecx, 3
     call ExitProcess
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -47,7 +51,9 @@ abort:
 ;----------------------------------------------------------
 global getpid
 getpid:
+    sub rsp, 40
     call GetCurrentProcessId
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -56,7 +62,9 @@ getpid:
 ;----------------------------------------------------------
 global sleep
 sleep:
+    sub rsp, 40
     call Sleep
+    add rsp, 40
     ret
 
 ;----------------------------------------------------------
@@ -71,7 +79,7 @@ system:
     push rbx
     push r12
     push r13
-    sub rsp, 96
+    sub rsp, 104
 
     test rcx, rcx
     jz  .fail
@@ -141,12 +149,10 @@ system:
     call WaitForSingleObject
 
     ; get exit code
-    sub rsp, 8
     mov rcx, [_process_info]
-    lea rdx, [rsp]
+    lea rdx, [rsp + 88]
     call GetExitCodeProcess
-    mov r13, [rsp]
-    add rsp, 8
+    mov r13d, [rsp + 88]
 
     ; close handles
     mov rcx, [_process_info]
@@ -158,7 +164,7 @@ system:
     call free
 
     mov rax, r13
-    add rsp, 96
+    add rsp, 104
     pop r13
     pop r12
     pop rbx
@@ -170,7 +176,7 @@ system:
     call free
 .fail:
     or rax, -1
-    add rsp, 96
+    add rsp, 104
     pop r13
     pop r12
     pop rbx
@@ -235,12 +241,10 @@ spawnl:
     mov rdx, -1
     call WaitForSingleObject
 
-    sub rsp, 8
     mov rcx, [_process_info]
-    lea rdx, [rsp]
+    lea rdx, [rsp + 88]
     call GetExitCodeProcess
-    mov r14, [rsp]
-    add rsp, 8
+    mov r14d, [rsp + 88]
 
     mov rcx, [_process_info]
     call CloseHandle
