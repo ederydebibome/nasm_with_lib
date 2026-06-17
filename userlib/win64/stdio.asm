@@ -270,14 +270,26 @@ printf:
     jz  .done
     cmp al, '%'
     je  .format
-    mov rcx, rax
-    call putchar
-    inc r14
+    mov r15, r12
+.literal_scan:
     inc r12
+    movzx eax, byte [r12]
+    test al, al
+    jz .literal_write
+    cmp al, '%'
+    jne .literal_scan
+.literal_write:
+    mov r8, r12
+    sub r8, r15
+    add r14, r8
+    mov rcx, rbx
+    mov rdx, r15
+    lea r9, [io_written]
+    mov qword [rsp + 32], 0
+    call WriteFile
     jmp .next_char
 
-.format:
-    inc r12
+.format:inc r12
     mov qword [rbp - 40], 6
     movzx rax, byte [r12]
     cmp al, '.'

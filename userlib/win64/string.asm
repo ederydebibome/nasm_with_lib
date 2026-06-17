@@ -538,7 +538,7 @@ strndup:
     ret
 
 ;----------------------------------------------------------
-; memcpy - copy n bytes from src to dst
+; memcpy - copy n bytes
 ; rcx = dst
 ; rdx = src
 ; r8  = n
@@ -548,14 +548,16 @@ global memcpy
 memcpy:
     mov rax, rcx
     test r8, r8
-    jz  .done
-.loop:
-    mov r10b, byte [rdx]
-    mov byte [rcx], r10b
-    inc rcx
-    inc rdx
-    dec r8
-    jnz .loop
+    jz .done
+    push rdi
+    push rsi
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rcx, r8
+    cld
+    rep movsb
+    pop rsi
+    pop rdi
 .done:
     ret
 
@@ -570,53 +572,57 @@ global memmove
 memmove:
     mov rax, rcx
     test r8, r8
-    jz  .done
+    jz .done
     cmp rcx, rdx
-    jbe .forward
+    je .done
+    push rdi
+    push rsi
+    cmp rcx, rdx
+    jb .forward
     lea r9, [rdx + r8]
     cmp rcx, r9
     jae .forward
-    ; copy backward
-    add rcx, r8
-    add rdx, r8
-    dec rcx
-    dec rdx
-.back_loop:
-    mov r10b, byte [rdx]
-    mov byte [rcx], r10b
-    dec rcx
-    dec rdx
-    dec r8
-    jnz .back_loop
+    lea rdi, [rcx + r8 - 1]
+    lea rsi, [rdx + r8 - 1]
+    mov rcx, r8
+    std
+    rep movsb
+    cld
+    pop rsi
+    pop rdi
     ret
 .forward:
-.loop:
-    mov r10b, byte [rdx]
-    mov byte [rcx], r10b
-    inc rcx
-    inc rdx
-    dec r8
-    jnz .loop
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rcx, r8
+    cld
+    rep movsb
+    pop rsi
+    pop rdi
 .done:
     ret
 
 ;----------------------------------------------------------
-; memset - fill n bytes with value
+; memset - set n bytes
 ; rcx = dst
 ; rdx = value (byte)
 ; r8  = n
 ; returns rax = dst
-;----------------------------------------------------------
+;----------------------------------------------------------global memset
 global memset
 memset:
     mov rax, rcx
     test r8, r8
-    jz  .done
-.loop:
-    mov byte [rcx], dl
-    inc rcx
-    dec r8
-    jnz .loop
+    jz .done
+    push rdi
+    mov rdi, rcx
+    mov rcx, r8
+    movzx eax, dl
+    cld
+    rep stosb
+    mov rax, rdi
+    sub rax, r8
+    pop rdi
 .done:
     ret
 
@@ -630,23 +636,26 @@ memset:
 global memcmp
 memcmp:
     test r8, r8
-    jz  .equal
-.loop:
-    mov al, byte [rcx]
-    mov r10b, byte [rdx]
-    cmp al, r10b
+    jz .equal
+    push rdi
+    push rsi
+    mov rsi, rcx
+    mov rdi, rdx
+    mov rcx, r8
+    cld
+    repe cmpsb
     jne .diff
-    inc rcx
-    inc rdx
-    dec r8
-    jnz .loop
+    pop rsi
+    pop rdi
 .equal:
-    xor rax, rax
+    xor eax, eax
     ret
 .diff:
-    movzx rax, al
-    movzx r10, r10b
-    sub rax, r10
+    movzx eax, byte [rsi - 1]
+    movzx r10d, byte [rdi - 1]
+    sub eax, r10d
+    pop rsi
+    pop rdi
     ret
 
 ;----------------------------------------------------------
