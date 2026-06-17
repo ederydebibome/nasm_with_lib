@@ -11,6 +11,21 @@ _ln10       dq 2.30258509299404568402
 _one        dq 1.0
 _two        dq 2.0
 _half       dq 0.5
+_neg_one    dq -1.0
+_two_pi     dq 6.28318530717958647692
+_inv_two_pi dq 0.15915494309189533577
+_pi_over_2  dq 1.57079632679489661923
+_neg_pi_over_2 dq -1.57079632679489661923
+_sin_c3     dq -0.16666666666666666667
+_sin_c5     dq 0.00833333333333333333
+_sin_c7     dq -0.00019841269841269841
+_sin_c9     dq 0.00000275573192239859
+_sin_c11    dq -0.00000002505210838544
+_cos_c2     dq -0.5
+_cos_c4     dq 0.04166666666666666667
+_cos_c6     dq -0.00138888888888888889
+_cos_c8     dq 0.00002480158730158730
+_cos_c10    dq -0.00000027557319223986
 _nan        dq 0x7FF8000000000000
 _inf        dq 0x7FF0000000000000
 align 16
@@ -140,52 +155,109 @@ hypot:
     ret
 
 ;----------------------------------------------------------
-; sin - sine (x87 FSIN hardware)
-; xmm0 = x
+; sin - sine (SSE2/SSE4.1 polynomial fast path)
+; xmm0 = x radians
 ; returns xmm0 = sin(x)
 ;----------------------------------------------------------
 global sin
 sin:
-    sub rsp, 8
-    movsd [rsp], xmm0
-    fld qword [rsp]
-    fsin
-    fstp qword [rsp]
-    movsd xmm0, [rsp]
-    add rsp, 8
+    movsd xmm1, xmm0
+    mulsd xmm1, [_inv_two_pi]
+    roundsd xmm1, xmm1, 0
+    mulsd xmm1, [_two_pi]
+    subsd xmm0, xmm1
+    ucomisd xmm0, [_pi_over_2]
+    jbe .check_low
+    movsd xmm1, [_pi]
+    subsd xmm1, xmm0
+    movsd xmm0, xmm1
+    jmp .poly
+.check_low:
+    ucomisd xmm0, [_neg_pi_over_2]
+    jae .poly
+    movsd xmm1, [_pi]
+    xorpd xmm1, [_sign_mask]
+    subsd xmm1, xmm0
+    movsd xmm0, xmm1
+.poly:
+    movsd xmm1, xmm0
+    mulsd xmm1, xmm1
+    movsd xmm2, [_sin_c11]
+    mulsd xmm2, xmm1
+    addsd xmm2, [_sin_c9]
+    mulsd xmm2, xmm1
+    addsd xmm2, [_sin_c7]
+    mulsd xmm2, xmm1
+    addsd xmm2, [_sin_c5]
+    mulsd xmm2, xmm1
+    addsd xmm2, [_sin_c3]
+    mulsd xmm2, xmm1
+    addsd xmm2, [_one]
+    mulsd xmm0, xmm2
     ret
 
 ;----------------------------------------------------------
-; cos - cosine (x87 FCOS hardware)
-; xmm0 = x
+; cos - cosine (SSE2/SSE4.1 polynomial fast path)
+; xmm0 = x radians
 ; returns xmm0 = cos(x)
 ;----------------------------------------------------------
 global cos
 cos:
-    sub rsp, 8
-    movsd [rsp], xmm0
-    fld qword [rsp]
-    fcos
-    fstp qword [rsp]
-    movsd xmm0, [rsp]
-    add rsp, 8
+    movsd xmm1, xmm0
+    mulsd xmm1, [_inv_two_pi]
+    roundsd xmm1, xmm1, 0
+    mulsd xmm1, [_two_pi]
+    subsd xmm0, xmm1
+    movsd xmm3, [_one]
+    ucomisd xmm0, [_pi_over_2]
+    jbe .check_low
+    movsd xmm1, [_pi]
+    subsd xmm1, xmm0
+    movsd xmm0, xmm1
+    movsd xmm3, [_neg_one]
+    jmp .poly
+.check_low:
+    ucomisd xmm0, [_neg_pi_over_2]
+    jae .poly
+    movsd xmm1, [_pi]
+    xorpd xmm1, [_sign_mask]
+    subsd xmm1, xmm0
+    movsd xmm0, xmm1
+    movsd xmm3, [_neg_one]
+.poly:
+    mulsd xmm0, xmm0
+    movsd xmm2, [_cos_c10]
+    mulsd xmm2, xmm0
+    addsd xmm2, [_cos_c8]
+    mulsd xmm2, xmm0
+    addsd xmm2, [_cos_c6]
+    mulsd xmm2, xmm0
+    addsd xmm2, [_cos_c4]
+    mulsd xmm2, xmm0
+    addsd xmm2, [_cos_c2]
+    mulsd xmm2, xmm0
+    addsd xmm2, [_one]
+    mulsd xmm2, xmm3
+    movsd xmm0, xmm2
     ret
 
 ;----------------------------------------------------------
-; tan - tangent (x87 FPTAN hardware)
-; xmm0 = x
+; tan - tangent via fast sin/cos
+; xmm0 = x radians
 ; returns xmm0 = tan(x)
 ;----------------------------------------------------------
 global tan
 tan:
-    sub rsp, 8
+    sub rsp, 24
     movsd [rsp], xmm0
-    fld qword [rsp]
-    fptan
-    fstp st0            ; pop the implicit 1.0
-    fstp qword [rsp]
+    call sin
+    movsd [rsp + 8], xmm0
     movsd xmm0, [rsp]
-    add rsp, 8
+    call cos
+    movsd xmm1, xmm0
+    movsd xmm0, [rsp + 8]
+    divsd xmm0, xmm1
+    add rsp, 24
     ret
 
 ;----------------------------------------------------------
