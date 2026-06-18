@@ -1270,7 +1270,7 @@ fopen:
     mov [rsp + 32], dword 2     ; CREATE_ALWAYS
 .call_create:
     mov [rsp + 40], dword 0x80  ; FILE_ATTRIBUTE_NORMAL
-    mov [rsp + 48], qword 0     ; template = NULL
+    mov qword [rsp + 48],  0     ; template = NULL
     call CreateFileA
     cmp rax, INVALID_HANDLE
     je  .fail
